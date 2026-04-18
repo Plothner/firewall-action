@@ -137,6 +137,12 @@ def main() -> int:
     commit_sha = os.environ.get("GITHUB_SHA", "")
     log(f"repo={repo_full} pr={pr_number} sha={commit_sha[:12]}")
 
+    # Docker containers need safe.directory for the mounted workspace
+    subprocess.run(
+        ["git", "config", "--global", "--add", "safe.directory", "/github/workspace"],
+        capture_output=True,
+    )
+
     # 1. Semgrep
     try:
         log("running semgrep...")
