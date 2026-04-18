@@ -98,6 +98,29 @@ def format_pr_comment(
     return "\n".join(lines)
 
 
+def _get_pr_number() -> int:
+    """Extract PR number from GitHub Actions event payload.
+    GitHub doesn't set a PR_NUMBER env var — it's in the event JSON."""
+    # Try explicit env first (for testing)
+    explicit = os.environ.get("GITHUB_PR_NUMBER") or os.environ.get("PR_NUMBER")
+    if explicit:
+        return int(explicit)
+    # Read from event payload (the real GitHub Actions way)
+    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    if event_path and Path(event_path).exists():
+        try:
+            with open(event_path) as f:
+                event = json.load(f)
+            pr = event.get("pull_request") or event.get("number")
+            if isinstance(pr, dict):
+                return int(pr.get("number", 0))
+            if isinstance(pr, int):
+                return pr
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+    return 0
+
+
 def main() -> int:
     backend = os.environ.get("INPUT_BACKEND_URL", "https://qryptera-api.plothner.com").rstrip("/")
     api_key = os.environ.get("INPUT_API_KEY", "")
@@ -107,8 +130,9 @@ def main() -> int:
         print("No GITHUB_REPOSITORY env; nothing to do.", file=sys.stderr)
         return 0
     repo_owner, repo_name = repo_full.split("/", 1)
-    pr_number = int(os.environ.get("GITHUB_PR_NUMBER") or os.environ.get("PR_NUMBER") or 0)
+    pr_number = _get_pr_number()
     commit_sha = os.environ.get("GITHUB_SHA", "")
+    print(f"[qryptera] repo={repo_full} pr={pr_number} sha={commit_sha[:12]}", file=sys.stderr)
     semgrep = run_semgrep(target=Path("."), rules_dir=_RULES_IN_IMAGE)
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
