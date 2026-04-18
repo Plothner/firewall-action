@@ -171,12 +171,21 @@ def main() -> int:
 
     # 3. Audit → backend
     try:
-        diff_result = subprocess.run(
-            ["git", "diff", f"{commit_sha}^..{commit_sha}"],
-            capture_output=True,
-            text=True,
-        )
+        # For pull_request events, diff between base and head branches.
+        # GITHUB_SHA is the merge commit; GITHUB_BASE_REF is the target branch.
+        base_ref = os.environ.get("GITHUB_BASE_REF", "")
+        head_ref = os.environ.get("GITHUB_HEAD_REF", "")
+        if base_ref and head_ref:
+            diff_cmd = ["git", "diff", f"origin/{base_ref}...origin/{head_ref}"]
+        elif base_ref:
+            diff_cmd = ["git", "diff", f"origin/{base_ref}...{commit_sha}"]
+        else:
+            diff_cmd = ["git", "diff", f"{commit_sha}^..{commit_sha}"]
+        log(f"diff cmd: {' '.join(diff_cmd)}")
+        diff_result = subprocess.run(diff_cmd, capture_output=True, text=True)
         diff = diff_result.stdout
+        if not diff and diff_result.stderr:
+            log(f"diff stderr: {diff_result.stderr[:200]}")
         log(f"git diff: {len(diff)} chars")
 
         log(f"POST {backend}/api/v1/firewall/audit")
