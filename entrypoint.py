@@ -21,7 +21,9 @@ def run_semgrep(target: Path, rules_dir: Path) -> dict[str, Any]:
         text=True,
         timeout=120,
     )
-    if result.returncode not in (0, 1):
+    # rc=0: no findings, rc=1: findings found, rc=2: some rules errored
+    # (e.g. language parser missing). All produce valid JSON in stdout.
+    if result.returncode not in (0, 1, 2):
         raise RuntimeError(f"semgrep failed (rc={result.returncode}): {result.stderr[:500]}")
     try:
         return dict(json.loads(result.stdout or "{}"))
