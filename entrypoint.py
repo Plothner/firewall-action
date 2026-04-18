@@ -122,58 +122,101 @@ def _get_pr_number() -> int:
 
 
 def main() -> int:
+    log = lambda msg: print(f"[qryptera] {msg}", file=sys.stderr)  # noqa: E731
+
     backend = os.environ.get("INPUT_BACKEND_URL", "https://qryptera-api.plothner.com").rstrip("/")
     api_key = os.environ.get("INPUT_API_KEY", "")
     github_token = os.environ.get("INPUT_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+
     repo_full = os.environ.get("GITHUB_REPOSITORY", "")
     if "/" not in repo_full:
-        print("No GITHUB_REPOSITORY env; nothing to do.", file=sys.stderr)
+        log("No GITHUB_REPOSITORY env; nothing to do.")
         return 0
     repo_owner, repo_name = repo_full.split("/", 1)
     pr_number = _get_pr_number()
     commit_sha = os.environ.get("GITHUB_SHA", "")
-    print(f"[qryptera] repo={repo_full} pr={pr_number} sha={commit_sha[:12]}", file=sys.stderr)
-    semgrep = run_semgrep(target=Path("."), rules_dir=_RULES_IN_IMAGE)
+    log(f"repo={repo_full} pr={pr_number} sha={commit_sha[:12]}")
+
+    # 1. Semgrep
+    try:
+        log("running semgrep...")
+        semgrep = run_semgrep(target=Path("."), rules_dir=_RULES_IN_IMAGE)
+        log(f"semgrep: {len(semgrep.get('results', []))} findings")
+    except Exception as e:
+        log(f"semgrep error (non-fatal): {e}")
+        semgrep = {"results": []}
+
+    # 2. Scan → backend
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    with httpx.Client(timeout=30.0, headers=headers) as client:
-        scan_resp = client.post(
-            f"{backend}/api/v1/firewall/scan",
-            json=build_scan_request(
-                semgrep_output=semgrep,
-                repo_owner=repo_owner,
-                repo_name=repo_name,
-                pr_number=pr_number,
-                commit_sha=commit_sha,
-            ),
-        ).json()
-        diff = subprocess.run(
+
+    try:
+        log(f"POST {backend}/api/v1/firewall/scan")
+        with httpx.Client(timeout=30.0, headers=headers) as client:
+            scan_resp = client.post(
+                f"{backend}/api/v1/firewall/scan",
+                json=build_scan_request(
+                    semgrep_output=semgrep,
+                    repo_owner=repo_owner,
+                    repo_name=repo_name,
+                    pr_number=pr_number,
+                    commit_sha=commit_sha,
+                ),
+            ).json()
+        log(f"scan: {scan_resp.get('cbom_assets_added', '?')} assets added")
+    except Exception as e:
+        log(f"scan error: {e}")
+        scan_resp = {"cbom_assets_added": 0, "rate_limit_remaining": "?"}
+
+    # 3. Audit → backend
+    try:
+        diff_result = subprocess.run(
             ["git", "diff", f"{commit_sha}^..{commit_sha}"],
             capture_output=True,
             text=True,
-        ).stdout
-        audit_resp = client.post(
-            f"{backend}/api/v1/firewall/audit",
-            json={
-                "repo_owner": repo_owner,
-                "repo_name": repo_name,
-                "pr_number": pr_number,
-                "unified_diff": diff,
-            },
-        ).json()
+        )
+        diff = diff_result.stdout
+        log(f"git diff: {len(diff)} chars")
+
+        log(f"POST {backend}/api/v1/firewall/audit")
+        with httpx.Client(timeout=60.0, headers=headers) as client:
+            audit_resp = client.post(
+                f"{backend}/api/v1/firewall/audit",
+                json={
+                    "repo_owner": repo_owner,
+                    "repo_name": repo_name,
+                    "pr_number": pr_number,
+                    "unified_diff": diff,
+                },
+            ).json()
+        log(f"audit: {len(audit_resp.get('findings', []))} findings, rate_limited={audit_resp.get('rate_limited')}")
+    except Exception as e:
+        log(f"audit error: {e}")
+        audit_resp = {"findings": [], "rate_limited": False}
+
+    # 4. Format + post comment
     body = format_pr_comment(scan_resp=scan_resp, audit_resp=audit_resp, semgrep=semgrep)
     if pr_number and github_token:
-        url = f"https://api.github.com/repos/{repo_full}/issues/{pr_number}/comments"
-        with httpx.Client(timeout=10.0) as gh:
-            gh.post(
-                url,
-                headers={
-                    "Authorization": f"Bearer {github_token}",
-                    "Accept": "application/vnd.github+json",
-                },
-                json={"body": body},
-            )
+        try:
+            url = f"https://api.github.com/repos/{repo_full}/issues/{pr_number}/comments"
+            log(f"POST comment to {url}")
+            with httpx.Client(timeout=10.0) as gh:
+                resp = gh.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {github_token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                    json={"body": body},
+                )
+                log(f"comment response: {resp.status_code}")
+        except Exception as e:
+            log(f"comment post error: {e}")
+    else:
+        log(f"skipping comment: pr_number={pr_number}, token={'set' if github_token else 'missing'}")
+
+    log("done")
     return 0
 
 
