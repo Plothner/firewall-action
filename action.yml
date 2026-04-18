@@ -1,0 +1,21 @@
+name: "Qryptera Crypto Debt Firewall"
+description: "Scan PRs for cryptographic debt — Semgrep + LLM Auditor."
+author: "Qryptera"
+branding:
+  icon: "lock"
+  color: "purple"
+inputs:
+  backend_url:
+    description: "Qryptera backend URL (default: production)"
+    required: false
+    default: "https://qryptera-api.plothner.com"
+  api_key:
+    description: "Optional Qryptera API key for paid-tier features"
+    required: false
+  github_token:
+    description: "GitHub token for posting PR comments"
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: "docker"
+  image: "Dockerfile"

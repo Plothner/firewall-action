@@ -1,0 +1,237 @@
+rules:
+  - id: java-rsa-keygen-weak
+    message: "RSA KeyPairGenerator with size < 2048"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or migrate to EC/Ed25519. Plan ML-DSA-65 for PQC."
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $KPG.initialize($SIZE);
+          - pattern: |
+              $KPG.initialize($SIZE, $RANDOM);
+      - metavariable-comparison:
+          metavariable: $SIZE
+          comparison: $SIZE < 2048
+
+  - id: java-messagedigest-md5
+    message: "MessageDigest.getInstance(\"MD5\")"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use SHA-256 or higher."
+    pattern-either:
+      - pattern: MessageDigest.getInstance("MD5")
+      - pattern: MessageDigest.getInstance("md5")
+
+  - id: java-messagedigest-sha1
+    message: "MessageDigest.getInstance(\"SHA-1\")"
+    severity: WARNING
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use SHA-256."
+    pattern-either:
+      - pattern: MessageDigest.getInstance("SHA-1")
+      - pattern: MessageDigest.getInstance("SHA1")
+
+  - id: java-signature-sha1-rsa
+    message: "SHA1withRSA signature algorithm"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: SHA1withRSA
+        migration_hint: "Use SHA256withRSA or ECDSA with SHA-256."
+    pattern-either:
+      - pattern: Signature.getInstance("SHA1withRSA")
+      - pattern: Signature.getInstance("SHA1WithRSA")
+
+  - id: java-cipher-des
+    message: "DES / 3DES cipher — deprecated"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Replace with AES-GCM."
+    pattern-either:
+      - pattern: Cipher.getInstance("DES")
+      - pattern: Cipher.getInstance("DESede")
+      - pattern: Cipher.getInstance("DES/...")
+      - pattern: Cipher.getInstance("DESede/...")
+
+  - id: java-cipher-rc4
+    message: "RC4 / ARCFOUR cipher — broken"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: RC4
+        migration_hint: "Replace with AES-GCM or ChaCha20-Poly1305."
+    pattern-either:
+      - pattern: Cipher.getInstance("RC4")
+      - pattern: Cipher.getInstance("ARCFOUR")
+
+  - id: java-cipher-ecb-mode
+    message: "AES-ECB mode — leaks plaintext patterns"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: AES-ECB
+        migration_hint: "Use AES/GCM/NoPadding."
+    pattern-either:
+      - pattern: Cipher.getInstance("AES/ECB/...")
+      - pattern: Cipher.getInstance("AES")
+
+  - id: java-bouncycastle-dsa-generator
+    message: "Bouncy Castle DSA key generator — deprecated"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: DSA
+        migration_hint: "Use ECDSA or Ed25519."
+    pattern-either:
+      - pattern: new DSAParametersGenerator()
+      - pattern: new DSAKeyPairGenerator()
+
+  - id: java-jce-keygen-des
+    message: "KeyGenerator.getInstance(\"DES\"|\"DESede\") — deprecated"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Use KeyGenerator.getInstance(\"AES\") + GCM transformation."
+    pattern-either:
+      - pattern: KeyGenerator.getInstance("DES")
+      - pattern: KeyGenerator.getInstance("DESede")
+
+  - id: java-jce-mac-hmacmd5
+    message: "Mac.getInstance(\"HmacMD5\"|\"HmacSHA1\") — weak MAC"
+    severity: WARNING
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: HMAC-weak
+        migration_hint: "Use HmacSHA256 or HmacSHA512."
+    pattern-either:
+      - pattern: Mac.getInstance("HmacMD5")
+      - pattern: Mac.getInstance("HmacSHA1")
+
+  - id: java-jce-dh-small-params
+    message: "Diffie-Hellman KeyPairGenerator initialized with <2048 bits"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: DH
+        migration_hint: "Use ≥2048-bit DH or switch to ECDH (secp256r1+). Plan ML-KEM migration."
+    patterns:
+      - pattern-either:
+          - pattern: |
+              KeyPairGenerator $KPG = KeyPairGenerator.getInstance("DH");
+              ...
+              $KPG.initialize($SIZE);
+          - pattern: |
+              KeyPairGenerator $KPG = KeyPairGenerator.getInstance("DiffieHellman");
+              ...
+              $KPG.initialize($SIZE);
+      - metavariable-comparison:
+          metavariable: $SIZE
+          comparison: $SIZE < 2048
+
+  - id: java-sslcontext-legacy
+    message: "SSLContext with legacy TLS / SSL protocol version"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Use SSLContext.getInstance(\"TLSv1.2\") minimum; prefer \"TLSv1.3\"."
+    pattern-either:
+      - pattern: SSLContext.getInstance("SSL")
+      - pattern: SSLContext.getInstance("SSLv3")
+      - pattern: SSLContext.getInstance("TLS")
+      - pattern: SSLContext.getInstance("TLSv1")
+      - pattern: SSLContext.getInstance("TLSv1.1")
+
+  - id: java-bc-rsa-keypair-weak
+    message: "Bouncy Castle RSAKeyPairGenerator with strength < 2048"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use strength ≥3072 or migrate to Ed25519."
+    patterns:
+      - pattern-either:
+          - pattern: new RSAKeyGenerationParameters($EXP, $RAND, $STRENGTH, $CERT)
+          - pattern: new KeyGenerationParameters($RAND, $STRENGTH)
+      - metavariable-comparison:
+          metavariable: $STRENGTH
+          comparison: $STRENGTH < 2048
+
+  - id: java-bc-pbe-weak-iters
+    message: "PBE parameters generator with low iteration count"
+    severity: WARNING
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: PBKDF2-weak
+        migration_hint: "Use ≥100000 iterations for modern PBKDF2/Scrypt/Argon2."
+    patterns:
+      - pattern-either:
+          - pattern: PKCS5S2ParametersGenerator.init($PASS, $SALT, $ITERS)
+          - pattern: org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator.init($PASS, $SALT, $ITERS)
+          - pattern: PKCS12ParametersGenerator.init($PASS, $SALT, $ITERS)
+          - pattern: OpenSSLPBEParametersGenerator.init($PASS, $SALT, $ITERS)
+      - metavariable-comparison:
+          metavariable: $ITERS
+          comparison: $ITERS < 10000
+
+  - id: java-bc-elgamal-generator
+    message: "Bouncy Castle ElGamal key generator — deprecated primitive"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: ElGamal
+        migration_hint: "Use RSA-OAEP-3072 or ECIES; plan ML-KEM-768 for PQC."
+    pattern-either:
+      - pattern: new ElGamalKeyPairGenerator()
+      - pattern: new ElGamalParametersGenerator()
+
+  - id: java-commons-crypto-ecb-mode
+    message: "Apache Commons Crypto AES/ECB cipher"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: AES-ECB
+        migration_hint: "Use AES/GCM/NoPadding via CryptoCipher."
+    pattern-either:
+      - pattern: org.apache.commons.crypto.cipher.CryptoCipherFactory.getCryptoCipher("AES/ECB/PKCS5Padding", ...)
+      - pattern: CryptoCipherFactory.getCryptoCipher("AES/ECB/PKCS5Padding", ...)
+      - pattern: CryptoCipherFactory.getCryptoCipher("AES/ECB/NoPadding", ...)
+
+  - id: java-commons-crypto-des
+    message: "Apache Commons Crypto DES/3DES"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Use AES-256-GCM via CryptoCipherFactory."
+    pattern-either:
+      - pattern: CryptoCipherFactory.getCryptoCipher("DES", ...)
+      - pattern: CryptoCipherFactory.getCryptoCipher("DESede", ...)
+      - pattern: org.apache.commons.crypto.cipher.CryptoCipherFactory.getCryptoCipher("DES", ...)

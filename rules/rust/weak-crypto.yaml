@@ -1,0 +1,167 @@
+rules:
+  - id: rust-md5-crate
+    message: "md5 crate — broken algorithm"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use sha2::Sha256 or higher."
+    pattern-either:
+      - pattern: md5::compute(...)
+      - pattern: md5::Md5::new()
+
+  - id: rust-sha1-crate
+    message: "sha1 crate — deprecated for signatures"
+    severity: WARNING
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use sha2::Sha256."
+    pattern-either:
+      - pattern: sha1::Sha1::new()
+      - pattern: Sha1::new()
+
+  - id: rust-openssl-md5
+    message: "openssl crate MD5 digest"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use MessageDigest::sha256()."
+    pattern-either:
+      - pattern: MessageDigest::md5()
+      - pattern: openssl::hash::MessageDigest::md5()
+
+  - id: rust-openssl-des
+    message: "openssl crate DES/3DES cipher"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Use Cipher::aes_256_gcm()."
+    pattern-either:
+      - pattern: Cipher::des_cbc()
+      - pattern: Cipher::des_ede3()
+      - pattern: Cipher::des_ede3_cbc()
+
+  - id: rust-rsa-keygen-weak
+    message: "rsa crate key generation < 2048 bits"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or switch to ed25519-dalek."
+    patterns:
+      - pattern: RsaPrivateKey::new(&mut $RNG, $BITS)
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: rust-ring-static-nonce
+    message: "ring::aead with a static nonce — catastrophic for AEAD"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: AEAD-static-nonce
+        migration_hint: "Use a CSRNG-sourced nonce per encryption; never reuse with the same key."
+    pattern-either:
+      - pattern: ring::aead::Nonce::assume_unique_for_key([0u8; 12])
+      - pattern: aead::Nonce::assume_unique_for_key([0u8; 12])
+      - pattern: ring::aead::Nonce::assume_unique_for_key([0; 12])
+      - pattern: aead::Nonce::assume_unique_for_key([0; 12])
+
+  - id: rust-rc4-crate
+    message: "rc4 crate — broken"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: RC4
+        migration_hint: "Use ChaCha20Poly1305 from chacha20poly1305 crate."
+    pattern-either:
+      - pattern: rc4::Rc4::new(...)
+
+  - id: rust-rustls-tls10-supported
+    message: "rustls ServerConfig configured with legacy TLS version"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Drop TLS 1.0 / 1.1 from supported versions; rustls defaults to TLS 1.2+ if you don't override."
+    pattern-either:
+      - pattern: '&rustls::version::TLS10'
+      - pattern: 'rustls::version::TLS10'
+      - pattern: '&rustls::version::TLS11'
+      - pattern: 'rustls::version::TLS11'
+
+  - id: rust-rustls-dangerous-accept-any
+    message: "rustls dangerous-mode certificate bypass"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Use a proper root CA store or webpki_roots — never bypass cert verification in production."
+    pattern-either:
+      - pattern: rustls::client::danger::ServerCertVerifier
+      - pattern: rustls::client::danger::HandshakeSignatureValid::assertion()
+      - pattern: rustls::client::WebPkiVerifier::new(...)
+
+  - id: rust-openssl-rsa-small
+    message: "openssl crate Rsa::generate with <2048 bits"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or migrate to ed25519-dalek."
+    patterns:
+      - pattern: openssl::rsa::Rsa::generate($BITS)
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: rust-openssl-ssl-method-old
+    message: "openssl crate SslMethod using legacy TLS/SSL variant"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Use SslMethod::tls_client() / tls_server(); pin min_proto_version to TLS 1.2+."
+    pattern-either:
+      - pattern: openssl::ssl::SslMethod::tlsv1()
+      - pattern: openssl::ssl::SslMethod::tlsv1_1()
+      - pattern: openssl::ssl::SslMethod::sslv23()
+      - pattern: openssl::ssl::SslMethod::sslv3()
+
+  - id: rust-openssl-verify-none
+    message: "openssl crate SSL configured with SslVerifyMode::NONE"
+    severity: ERROR
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Use SslVerifyMode::PEER. Never disable peer verification in production."
+    pattern-either:
+      - pattern: '$X.set_verify(SslVerifyMode::NONE)'
+      - pattern: '$X.set_verify(openssl::ssl::SslVerifyMode::NONE)'
+
+  - id: rust-ring-aead-less-safe
+    message: "ring::aead::LessSafeKey — bypasses the safe single-use key API"
+    severity: WARNING
+    languages: [rust]
+    metadata:
+      qryptera:
+        algorithm: AEAD-lesssafe
+        migration_hint: "Use SealingKey / OpeningKey with a proper NonceSequence. LessSafeKey is for special cases only."
+    pattern-either:
+      - pattern: ring::aead::LessSafeKey::new(...)
+      - pattern: aead::LessSafeKey::new(...)

@@ -1,0 +1,219 @@
+rules:
+  - id: nodejs-crypto-md5
+    message: "crypto.createHash('md5') — broken"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use crypto.createHash('sha256') or higher."
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash('md5')
+      - pattern: require("crypto").createHash("md5")
+
+  - id: nodejs-crypto-sha1
+    message: "crypto.createHash('sha1') — deprecated"
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use crypto.createHash('sha256')."
+    pattern-either:
+      - pattern: crypto.createHash("sha1")
+      - pattern: crypto.createHash('sha1')
+
+  - id: nodejs-crypto-des
+    message: "DES / 3DES cipher — deprecated"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Use aes-256-gcm."
+    pattern-either:
+      - pattern: crypto.createCipheriv("des", ...)
+      - pattern: crypto.createCipheriv("des-ede3", ...)
+      - pattern: crypto.createCipheriv("des-ede3-cbc", ...)
+      - pattern: crypto.createCipheriv('des', ...)
+      - pattern: crypto.createCipheriv('des-ede3', ...)
+
+  - id: nodejs-crypto-rc4
+    message: "RC4 cipher — broken"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: RC4
+        migration_hint: "Use aes-256-gcm or chacha20-poly1305."
+    pattern-either:
+      - pattern: crypto.createCipheriv("rc4", ...)
+      - pattern: crypto.createCipheriv('rc4', ...)
+
+  - id: nodejs-tls-insecure-protocols
+    message: "TLS minimum version below TLSv1.2"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Set minVersion to 'TLSv1.2' or 'TLSv1.3'."
+    pattern-either:
+      - pattern: |
+          {
+            ...
+            minVersion: "SSLv3",
+            ...
+          }
+      - pattern: |
+          {
+            ...
+            minVersion: "TLSv1",
+            ...
+          }
+      - pattern: |
+          {
+            ...
+            minVersion: "TLSv1.1",
+            ...
+          }
+
+  - id: nodejs-rsa-keygen-weak
+    message: "RSA keypair modulusLength < 2048"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or switch to EC/Ed25519."
+    patterns:
+      - pattern: 'crypto.generateKeyPairSync("rsa", { modulusLength: $BITS, ... })'
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: nodejs-jsrsasign-md5
+    message: "jsrsasign MD5 signing"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use SHA256withRSA or higher in jsrsasign."
+    pattern-either:
+      - pattern: KJUR.asn1.x509.X509.$SIG = "MD5withRSA"
+      - pattern: $X.sign(..., "MD5withRSA")
+      - pattern: $X.sign(..., "MD5withECDSA")
+
+  - id: nodejs-forge-md-md5
+    message: "node-forge MD5 digest"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use forge.md.sha256.create()."
+    pattern-either:
+      - pattern: forge.md.md5.create()
+      - pattern: require("node-forge").md.md5.create()
+
+  - id: nodejs-forge-md-sha1
+    message: "node-forge SHA-1 digest"
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use forge.md.sha256.create()."
+    pattern-either:
+      - pattern: forge.md.sha1.create()
+      - pattern: require("node-forge").md.sha1.create()
+
+  - id: nodejs-forge-pki-rsa-small
+    message: "node-forge forge.pki.rsa.generateKeyPair with <2048 bits"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or switch to EC key generation."
+    patterns:
+      - pattern: 'forge.pki.rsa.generateKeyPair({bits: $N, ...})'
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: nodejs-forge-cipher-des
+    message: "node-forge DES cipher"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Use forge.cipher.createCipher('AES-GCM', ...)."
+    pattern-either:
+      - pattern: forge.cipher.createCipher("DES-CBC", ...)
+      - pattern: forge.cipher.createCipher("DES-ECB", ...)
+      - pattern: forge.cipher.createCipher("3DES-CBC", ...)
+      - pattern: forge.cipher.createCipher('DES-CBC', ...)
+      - pattern: forge.cipher.createCipher('DES-ECB', ...)
+      - pattern: forge.cipher.createCipher('3DES-CBC', ...)
+
+  - id: nodejs-node-rsa-keysize-small
+    message: "node-rsa NodeRSA instantiated with <2048 bit modulus"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use ≥3072 or switch to Ed25519 via @noble/ed25519."
+    patterns:
+      - pattern-either:
+          - pattern: 'new NodeRSA({b: $N, ...})'
+          - pattern: new NodeRSA(null, $N)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: nodejs-node-rsa-sha1-signing
+    message: "node-rsa signingScheme=pkcs1-sha1 — SHA-1-based signature"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use signingScheme pkcs1-sha256 or pkcs1-sha512."
+    pattern-either:
+      - pattern: '$X.setOptions({signingScheme: "pkcs1-sha1", ...})'
+      - pattern: '$X.setOptions({signingScheme: "pkcs1-sha1"})'
+
+  - id: nodejs-jsrsasign-rsa-small
+    message: "jsrsasign KEYUTIL.generateKeypair('RSA', N) with N<2048"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use ≥3072 or EC."
+    patterns:
+      - pattern-either:
+          - pattern: KEYUTIL.generateKeypair("RSA", $N)
+          - pattern: KEYUTIL.generateKeypair('RSA', $N)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: nodejs-jsrsasign-sha1-signature
+    message: "jsrsasign SHA-1 signature algorithm selected"
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      qryptera:
+        algorithm: SHA1withRSA
+        migration_hint: "Use SHA256withRSA or SHA384withECDSA."
+    pattern-either:
+      - pattern: 'new KJUR.crypto.Signature({alg: "SHA1withRSA", ...})'
+      - pattern: 'new KJUR.crypto.Signature({alg: "SHA1withRSA"})'
+      - pattern: 'new KJUR.crypto.Signature({alg: "SHA1withECDSA", ...})'
+      - pattern: 'new KJUR.crypto.Signature({alg: "SHA1withECDSA"})'

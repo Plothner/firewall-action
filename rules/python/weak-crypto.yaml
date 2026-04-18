@@ -1,0 +1,190 @@
+rules:
+  - id: python-rsa-keygen-weak
+    message: "RSA key generation with key size < 2048 bits"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Replace with RSA ≥3072, ECDSA-P256, or Ed25519 now; plan ML-DSA-65 for PQC transition."
+    patterns:
+      - pattern-either:
+          - pattern: rsa.generate_private_key(public_exponent=..., key_size=$SIZE, ...)
+          - pattern: RSA.generate($SIZE, ...)
+          - pattern: RSA.generate($SIZE)
+      - metavariable-comparison:
+          metavariable: $SIZE
+          comparison: $SIZE < 2048
+
+  - id: python-hashlib-md5
+    message: "hashlib.md5 — broken for signature/integrity use."
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use hashlib.sha256 or higher."
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.new("md5", ...)
+      - pattern: hashlib.new('md5', ...)
+
+  - id: python-hashlib-sha1
+    message: "hashlib.sha1 — broken for signature/integrity use."
+    severity: WARNING
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use hashlib.sha256 or higher."
+    pattern-either:
+      - pattern: hashlib.sha1(...)
+      - pattern: hashlib.new("sha1", ...)
+      - pattern: hashlib.new('sha1', ...)
+
+  - id: python-paramiko-dss
+    message: "DSA (DSS) host keys accepted — weak algorithm, remove."
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: DSA
+        migration_hint: "Remove DSS from accepted host-key algorithms. Use Ed25519 or ECDSA-P256."
+    pattern-either:
+      - pattern: paramiko.DSSKey.from_private_key_file(...)
+      - pattern: paramiko.DSSKey(...)
+
+  - id: python-cryptography-3des
+    message: "Triple-DES (3DES) — deprecated, use AES."
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: 3DES
+        migration_hint: "Replace with AES-GCM-256."
+    pattern-either:
+      - pattern: algorithms.TripleDES(...)
+      - pattern: algorithms.TripleDES
+
+  - id: python-cryptography-ecb-mode
+    message: "ECB mode — leaks plaintext patterns; use GCM or CBC+HMAC."
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: AES-ECB
+        migration_hint: "Use modes.GCM or modes.CBC with HMAC."
+    pattern: modes.ECB(...)
+
+  - id: python-pyopenssl-md5-sign
+    message: "pyOpenSSL signing with MD5."
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use sha256 or higher in sign()."
+    pattern-either:
+      - pattern: $X.sign($KEY, "md5")
+      - pattern: $X.sign($KEY, 'md5')
+
+  - id: python-cryptography-sha1-hash
+    message: "cryptography.hazmat SHA1() in hash/signing context"
+    severity: WARNING
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use hashes.SHA256() or higher."
+    pattern-either:
+      - pattern: hashes.SHA1()
+      - pattern: hashes.SHA1
+      - pattern: padding.PSS(mgf=padding.MGF1(hashes.SHA1()), salt_length=...)
+
+  - id: python-cryptography-pbkdf2-weak-hash
+    message: "PBKDF2HMAC with MD5 or SHA-1 — replace with SHA-256+"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: PBKDF2-weak
+        migration_hint: "Use hashes.SHA256 or higher as the PBKDF2 primitive."
+    pattern-either:
+      - pattern: PBKDF2HMAC(algorithm=hashes.MD5(), ...)
+      - pattern: PBKDF2HMAC(algorithm=hashes.SHA1(), ...)
+
+  - id: python-pyopenssl-pkey-rsa-small
+    message: "pyOpenSSL PKey.generate_key(TYPE_RSA, N) with N<2048"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use ≥3072 or switch to EC keys."
+    patterns:
+      - pattern-either:
+          - pattern: $P.generate_key(OpenSSL.crypto.TYPE_RSA, $N)
+          - pattern: $P.generate_key(crypto.TYPE_RSA, $N)
+          - pattern: $P.generate_key(TYPE_RSA, $N)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: python-pyopenssl-tls-method-old
+    message: "pyOpenSSL Context using legacy TLS method (SSLv3 / TLSv1.0 / TLSv1.1)"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Use TLS_METHOD and set min version via set_min_proto_version to TLS 1.2+."
+    pattern-either:
+      - pattern: SSL.Context(SSL.SSLv23_METHOD)
+      - pattern: SSL.Context(SSL.SSLv3_METHOD)
+      - pattern: SSL.Context(SSL.TLSv1_METHOD)
+      - pattern: SSL.Context(SSL.TLSv1_1_METHOD)
+
+  - id: python-paramiko-rsa-key-small
+    message: "paramiko.RSAKey.generate with small modulus"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Generate ≥3072 RSA or use ED25519Key."
+    patterns:
+      - pattern: paramiko.RSAKey.generate($N)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: python-rsa-package-small
+    message: "rsa.newkeys with small modulus (pypi 'rsa' package)"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use ≥3072. The 'rsa' pypi library has limited PQC path — consider moving to 'cryptography' for future migration."
+    patterns:
+      - pattern-either:
+          - pattern: rsa.newkeys($N)
+          - pattern: rsa_pkg.newkeys($N)
+          - pattern: $X.newkeys($N)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: python-pycryptodome-des
+    message: "pycryptodome DES or Triple-DES cipher"
+    severity: ERROR
+    languages: [python]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Replace with AES in GCM mode."
+    pattern-either:
+      - pattern: DES.new(...)
+      - pattern: DES3.new(...)
+      - pattern: Cryptodome.Cipher.DES.new(...)
+      - pattern: Cryptodome.Cipher.DES3.new(...)

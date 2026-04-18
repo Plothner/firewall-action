@@ -1,0 +1,219 @@
+rules:
+  - id: go-rsa-generate-small
+    message: "RSA key generation < 2048 bits"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: RSA
+        migration_hint: "Use 3072+ or switch to Ed25519. Plan ML-DSA-65 for PQC."
+    patterns:
+      - pattern: rsa.GenerateKey($RAND, $BITS)
+      - metavariable-comparison:
+          metavariable: $BITS
+          comparison: $BITS < 2048
+
+  - id: go-crypto-md5
+    message: "crypto/md5 used — broken"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: MD5
+        migration_hint: "Use crypto/sha256."
+    pattern-either:
+      - pattern: md5.New()
+      - pattern: md5.Sum(...)
+
+  - id: go-crypto-sha1
+    message: "crypto/sha1 — deprecated for signatures"
+    severity: WARNING
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: SHA-1
+        migration_hint: "Use crypto/sha256 or higher for any signature/integrity path."
+    pattern-either:
+      - pattern: sha1.New()
+      - pattern: sha1.Sum(...)
+
+  - id: go-crypto-des
+    message: "crypto/des — deprecated"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: DES
+        migration_hint: "Replace with crypto/aes in GCM mode."
+    pattern-either:
+      - pattern: des.NewCipher(...)
+      - pattern: des.NewTripleDESCipher(...)
+
+  - id: go-crypto-rc4
+    message: "crypto/rc4 — broken"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: RC4
+        migration_hint: "Replace with AES-GCM or ChaCha20-Poly1305."
+    pattern: rc4.NewCipher(...)
+
+  - id: go-tls-min-version-low
+    message: "TLS MinVersion below TLS 1.2"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Require tls.VersionTLS12 minimum; prefer tls.VersionTLS13."
+    patterns:
+      - pattern-either:
+          - pattern: |
+              tls.Config{
+                ...
+                MinVersion: tls.VersionSSL30,
+                ...
+              }
+          - pattern: |
+              tls.Config{
+                ...
+                MinVersion: tls.VersionTLS10,
+                ...
+              }
+          - pattern: |
+              tls.Config{
+                ...
+                MinVersion: tls.VersionTLS11,
+                ...
+              }
+
+  - id: go-x509-dsa-keys
+    message: "DSA public key type — deprecated"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: DSA
+        migration_hint: "Use Ed25519 or ECDSA."
+    pattern-either:
+      - pattern: dsa.GenerateParameters(...)
+      - pattern: dsa.GenerateKey(...)
+
+  - id: go-tls-insecure-skip-verify
+    message: "tls.Config with InsecureSkipVerify: true — disables cert chain validation"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: TLS-policy
+        migration_hint: "Never set InsecureSkipVerify=true in production. Use a proper RootCAs pool."
+    pattern-either:
+      - pattern: |
+          tls.Config{
+            ...,
+            InsecureSkipVerify: true,
+            ...,
+          }
+      - pattern: |
+          &tls.Config{
+            ...,
+            InsecureSkipVerify: true,
+            ...,
+          }
+
+  - id: go-tls-weak-cipher-suites
+    message: "tls.Config includes a deprecated cipher suite identifier"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: TLS-cipher
+        migration_hint: "Remove RC4/3DES/CBC-SHA from CipherSuites; rely on Go's default TLS 1.3 suites."
+    pattern-either:
+      - pattern: tls.TLS_RSA_WITH_RC4_128_SHA
+      - pattern: tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA
+      - pattern: tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA
+      - pattern: tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
+      - pattern: tls.TLS_RSA_WITH_AES_128_CBC_SHA
+      - pattern: tls.TLS_RSA_WITH_AES_256_CBC_SHA
+
+  - id: go-elliptic-p224
+    message: "crypto/elliptic P-224 — acceptable today but flagged for PQC migration prep"
+    severity: WARNING
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: ECC-P224
+        migration_hint: "Migrate to elliptic.P256() or Ed25519. Plan ML-DSA-65 for PQC."
+    pattern-either:
+      - pattern: elliptic.P224()
+      - pattern: elliptic.P224
+
+  - id: go-xcrypto-ssh-insecure-ignore-hostkey
+    message: "x/crypto/ssh InsecureIgnoreHostKey — disables host verification"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: SSH-policy
+        migration_hint: "Use ssh.FixedHostKey or a known_hosts-backed callback."
+    pattern: ssh.InsecureIgnoreHostKey()
+
+  - id: go-xcrypto-ssh-weak-kex
+    message: "x/crypto/ssh ClientConfig allows weak KEX / ciphers / MACs"
+    severity: WARNING
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: SSH-weak-algs
+        migration_hint: "Remove diffie-hellman-group1-sha1 / arcfour / hmac-sha1 from ssh.Config."
+    pattern-either:
+      - pattern: '"diffie-hellman-group1-sha1"'
+      - pattern: '"arcfour"'
+      - pattern: '"arcfour128"'
+      - pattern: '"arcfour256"'
+      - pattern: '"hmac-sha1"'
+      - pattern: '"hmac-md5"'
+
+  - id: go-xcrypto-nacl-import
+    message: "x/crypto/nacl is deprecated in favour of the standard library crypto primitives"
+    severity: INFO
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: NaCl
+        migration_hint: "Use crypto/ed25519, crypto/aes with chacha20poly1305.NewX, or age-encryption instead."
+    pattern-either:
+      - pattern: |
+          import "golang.org/x/crypto/nacl/box"
+      - pattern: |
+          import "golang.org/x/crypto/nacl/secretbox"
+      - pattern: |
+          import "golang.org/x/crypto/nacl/sign"
+
+  - id: go-xcrypto-ripemd160
+    message: "x/crypto/ripemd160 is deprecated"
+    severity: WARNING
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: RIPEMD-160
+        migration_hint: "Use crypto/sha256 or higher."
+    pattern-either:
+      - pattern: ripemd160.New()
+      - pattern: |
+          import "golang.org/x/crypto/ripemd160"
+
+  - id: go-x509-dsa-parse
+    message: "Parsing an x509 DSA key — algorithm is deprecated"
+    severity: ERROR
+    languages: [go]
+    metadata:
+      qryptera:
+        algorithm: DSA
+        migration_hint: "Reject DSA keys at parse time; use Ed25519 or ECDSA."
+    pattern-either:
+      - pattern: x509.MarshalPKCS1PrivateKey(...)
+      - pattern: dsa.PublicKey{...}
+      - pattern: dsa.PrivateKey{...}
